@@ -5,7 +5,7 @@ import datetime
 from unittest.mock import patch, MagicMock
 
 # Import the classes to test
-from db import HealthDatabase, Metrics
+from db import Metrics, TEST_DB_PATH, DB_CONFIG, get_test_db_instance
 
 
 class TestMetrics(unittest.TestCase):
@@ -124,13 +124,9 @@ class TestHealthDatabase(unittest.TestCase):
     
     def setUp(self):
         """Set up a test database before each test"""
-        self.test_db_path = "test_pi_health.db"
-        # Ensure the test database doesn't exist
-        if os.path.exists(self.test_db_path):
-            os.remove(self.test_db_path)
-        
-        # Create a new test database
-        self.db = HealthDatabase(db_path=self.test_db_path)
+        # Use the test database utility function
+        self.db = get_test_db_instance()
+        self.test_db_path = TEST_DB_PATH
     
     def tearDown(self):
         """Clean up after each test"""
@@ -146,16 +142,16 @@ class TestHealthDatabase(unittest.TestCase):
         cursor = conn.cursor()
         
         # Check if the health_metrics table exists
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT name FROM sqlite_master 
-            WHERE type='table' AND name='health_metrics'
+            WHERE type='table' AND name='{DB_CONFIG['table_name']}'
         """)
         
         table_exists = cursor.fetchone() is not None
         self.assertTrue(table_exists)
         
         # Check the table structure
-        cursor.execute("PRAGMA table_info(health_metrics)")
+        cursor.execute(f"PRAGMA table_info({DB_CONFIG['table_name']})")
         columns = {row[1]: row[2] for row in cursor.fetchall()}
         
         # Verify all expected columns exist with correct types
@@ -191,7 +187,7 @@ class TestHealthDatabase(unittest.TestCase):
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        cursor.execute("SELECT * FROM health_metrics")
+        cursor.execute(f"SELECT * FROM {DB_CONFIG['table_name']}")
         row = dict(cursor.fetchone())
         
         # Verify the stored values

@@ -2,9 +2,19 @@
 import sqlite3
 import logging
 import datetime
+import os
 from typing import Dict, Any, Optional, List, Union
 
 logger = logging.getLogger('pi_health_monitor.db')
+
+# Define database paths as constants
+DB_PATH = 'pi_health.db'
+TEST_DB_PATH = 'test_pi_health.db'
+
+# Database configuration
+DB_CONFIG = {
+    'table_name': 'health_metrics'
+}
 
 class Metrics:
     """Class representing system metrics with validation on initialization"""
@@ -126,7 +136,7 @@ class Metrics:
         )
 
 class HealthDatabase:
-    def __init__(self, db_path='pi_health.db'):
+    def __init__(self, db_path=DB_PATH):
         """
         Initialize the database connection
         
@@ -143,7 +153,7 @@ class HealthDatabase:
         
         # Create health metrics table
         cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS health_metrics (
+        CREATE TABLE IF NOT EXISTS {DB_CONFIG['table_name']} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             {Metrics.get_schema_definitions()}
         )
@@ -174,7 +184,7 @@ class HealthDatabase:
             cursor = conn.cursor()
             
             cursor.execute(f'''
-            INSERT INTO health_metrics (
+            INSERT INTO {DB_CONFIG['table_name']} (
                 {Metrics.get_column_names_sql()}
             ) VALUES ({Metrics.get_placeholders()})
             ''', metrics.to_tuple())
@@ -203,8 +213,8 @@ class HealthDatabase:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        cursor.execute('''
-        SELECT * FROM health_metrics 
+        cursor.execute(f'''
+        SELECT * FROM {DB_CONFIG['table_name']} 
         ORDER BY timestamp DESC 
         LIMIT ?
         ''', (limit,))
@@ -227,8 +237,8 @@ class HealthDatabase:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        cursor.execute('''
-        SELECT * FROM health_metrics 
+        cursor.execute(f'''
+        SELECT * FROM {DB_CONFIG['table_name']} 
         WHERE timestamp > datetime('now', '-' || ? || ' hours')
         ORDER BY timestamp
         ''', (hours,))
@@ -236,4 +246,11 @@ class HealthDatabase:
         results = [dict(row) for row in cursor.fetchall()]
         conn.close()
         
-        return results 
+        return results
+
+# Helper function to create a test database instance
+def get_test_db_instance():
+    """Create a fresh test database instance for testing"""
+    if os.path.exists(TEST_DB_PATH):
+        os.remove(TEST_DB_PATH)
+    return HealthDatabase(db_path=TEST_DB_PATH) 

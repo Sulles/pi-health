@@ -7,7 +7,7 @@ import datetime
 import argparse
 
 # Import our database module
-from db import HealthDatabase, Metrics
+from db import HealthDatabase, Metrics, DB_PATH
 
 # Configure logging
 logging.basicConfig(
@@ -17,16 +17,16 @@ logging.basicConfig(
 logger = logging.getLogger('pi_health_monitor')
 
 class HealthMonitor:
-    def __init__(self, db_path='pi_health.db', interval=60):
+    def __init__(self, interval=60, db_path=DB_PATH):
         """
         Initialize the health monitor
         
         Args:
-            db_path: Path to SQLite database
             interval: Monitoring interval in seconds
+            db_path: Path to SQLite database
         """
         self.interval = interval
-        self.db = HealthDatabase(db_path)
+        self.db = HealthDatabase(db_path=db_path)
         
     def get_cpu_temperature(self):
         """Get CPU temperature in Celsius"""
@@ -85,7 +85,7 @@ class HealthMonitor:
 def main():
     parser = argparse.ArgumentParser(description='Raspberry Pi Health Monitor')
     parser.add_argument('--interval', type=int, default=60, help='Monitoring interval in seconds')
-    parser.add_argument('--db', type=str, default='pi_health.db', help='SQLite database path')
+    parser.add_argument('--db', type=str, default=DB_PATH, help='SQLite database path')
     parser.add_argument('--log-level', type=str, choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], 
                         default='INFO', help='Set the logging level')
     
@@ -96,8 +96,8 @@ def main():
     
     # Create the monitor
     monitor = HealthMonitor(
-        db_path=args.db,
-        interval=args.interval
+        interval=args.interval,
+        db_path=args.db
     )
     
     # Run monitoring loop

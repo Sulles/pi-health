@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock, mock_open
 
 # Import the class to test
 from monitor import HealthMonitor
-from db import Metrics
+from db import Metrics, TEST_DB_PATH
 
 
 class TestHealthMonitor(unittest.TestCase):
@@ -13,20 +13,18 @@ class TestHealthMonitor(unittest.TestCase):
     
     def setUp(self):
         """Set up before each test"""
-        # Create a test database path
-        self.test_db_path = "test_pi_health.db"
-        # Remove the test database if it exists
-        if os.path.exists(self.test_db_path):
-            os.remove(self.test_db_path)
+        # Remove the test database if it exists and create a fresh monitor
+        if os.path.exists(TEST_DB_PATH):
+            os.remove(TEST_DB_PATH)
         
         # Create a monitor with a short interval for testing
-        self.monitor = HealthMonitor(db_path=self.test_db_path, interval=1)
+        self.monitor = HealthMonitor(interval=1, db_path=TEST_DB_PATH)
     
     def tearDown(self):
         """Clean up after each test"""
         # Remove the test database if it exists
-        if os.path.exists(self.test_db_path):
-            os.remove(self.test_db_path)
+        if os.path.exists(TEST_DB_PATH):
+            os.remove(TEST_DB_PATH)
     
     @patch('psutil.cpu_percent')
     @patch('psutil.virtual_memory')
