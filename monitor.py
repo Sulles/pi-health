@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
 import time
-import sqlite3
 import logging
 import psutil
 import datetime
 import argparse
-from pathlib import Path
+
+# Import our database module
+from db import HealthDatabase, Metrics
 
 # Configure logging
 logging.basicConfig(
@@ -24,33 +25,9 @@ class HealthMonitor:
             db_path: Path to SQLite database
             interval: Monitoring interval in seconds
         """
-        self.db_path = db_path
         self.interval = interval
-        self.setup_database()
+        self.db = HealthDatabase(db_path)
         
-    def setup_database(self):
-        """Create the SQLite database and tables if they don't exist"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Create health metrics table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS health_metrics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            cpu_percent REAL,
-            memory_percent REAL,
-            disk_percent REAL,
-            temperature REAL,
-            cpu_frequency REAL,
-            uptime REAL
-        )
-        ''')
-        
-        conn.commit()
-        conn.close()
-        logger.info(f"Database setup complete at {self.db_path}")
-    
     def get_cpu_temperature(self):
         """Get CPU temperature in Celsius"""
         try:
@@ -66,40 +43,26 @@ class HealthMonitor:
             return None
     
     def get_system_metrics(self):
-        """Collect system health metrics"""
-        metrics = {
-            'timestamp': datetime.datetime.now().isoformat(),
-            'cpu_percent': psutil.cpu_percent(interval=1),
-            'memory_percent': psutil.virtual_memory().percent,
-            'disk_percent': psutil.disk_usage('/').percent,
-            'temperature': self.get_cpu_temperature(),
-            'cpu_frequency': psutil.cpu_freq().current if psutil.cpu_freq() else None,
-            'uptime': time.time() - psutil.boot_time()
-        }
-        return metrics
-    
-    def log_metrics(self, metrics):
-        """Log metrics to the SQLite database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        """
+        Collect system health metrics
         
-        cursor.execute('''
-        INSERT INTO health_metrics (
-            timestamp, cpu_percent, memory_percent, disk_percent, 
-            temperature, cpu_frequency, uptime
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            metrics['timestamp'],
-            metrics['cpu_percent'],
-            metrics['memory_percent'],
-            metrics['disk_percent'],
-            metrics['temperature'],
-            metrics['cpu_frequency'],
-            metrics['uptime']
-        ))
+        Returns:
+            Metrics: A Metrics object with current system data
+        """
+        # Get CPU frequency if available
+        cpu_freq = psutil.cpu_freq()
+        cpu_frequency = cpu_freq.current if cpu_freq else None
         
-        conn.commit()
-        conn.close()
+        # Create metrics object directly
+        return Metrics(
+            timestamp=datetime.datetime.now().isoformat(),
+            cpu_percent=psutil.cpu_percent(interval=1),
+            memory_percent=psutil.virtual_memory().percent,
+            disk_percent=psutil.disk_usage('/').percent,
+            temperature=self.get_cpu_temperature(),
+            cpu_frequency=cpu_frequency,
+            uptime=time.time() - psutil.boot_time()
+        )
     
     def run(self):
         """Main monitoring loop"""
@@ -108,8 +71,11 @@ class HealthMonitor:
         try:
             while True:
                 metrics = self.get_system_metrics()
-                self.log_metrics(metrics)
-                logger.debug(f"Logged metrics: {metrics}")
+                if self.db.log_metrics(metrics):
+                    logger.debug(f"Logged metrics: {metrics.to_dict()}")
+                else:
+                    logger.error("Failed to log metrics")
+                
                 time.sleep(self.interval)
         except KeyboardInterrupt:
             logger.info("Monitoring stopped by user")
