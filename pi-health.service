@@ -1,0 +1,14 @@
+[Unit]
+Description=Raspberry Pi Health Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/admin/GitHub/pi-health/monitor.py --db /home/admin/GitHub/pi-health/health.db --interval 60 --log-level INFO
+WorkingDirectory=/home/admin/GitHub/pi-health
+Restart=on-failure
+RestartSec=10s
+User=admin
+
+[Install]
+WantedBy=multi-user.target 
