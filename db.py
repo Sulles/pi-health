@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, List, Union
 logger = logging.getLogger('pi_health_monitor.db')
 
 # Define database paths as constants
-DB_PATH = 'pi_health.db'
+DB_PATH = 'pi-health.db'
 TEST_DB_PATH = 'test_pi_health.db'
 
 # Database configuration
