@@ -1,6 +1,9 @@
 #!/bin/bash
 # Script to reload and restart the pi-health service
 
+echo "Copying pi-health.service to /etc/systemd/system/"
+sudo cp pi-health.service /etc/systemd/system/
+
 echo "Reloading systemd configuration..."
 sudo systemctl daemon-reload
 
