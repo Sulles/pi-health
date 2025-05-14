@@ -1,0 +1,11 @@
+#!/bin/bash
+# Script to stop and disable the pi-health service
+
+echo "Stopping pi-health service..."
+sudo systemctl stop pi-health.service
+
+echo "Disabling pi-health service..."
+sudo systemctl disable pi-health.service
+
+echo "Service status:"
+sudo systemctl status pi-health.service || echo "Service is not running" 

@@ -1,0 +1,11 @@
+#!/bin/bash
+# Script to reload and restart the pi-health service
+
+echo "Reloading systemd configuration..."
+sudo systemctl daemon-reload
+
+echo "Restarting pi-health service..."
+sudo systemctl restart pi-health.service
+
+echo "Service status:"
+sudo systemctl status pi-health.service 
