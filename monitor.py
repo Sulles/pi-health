@@ -6,6 +6,7 @@ import psutil
 import datetime
 import argparse
 import subprocess
+import json
 
 # Import our database module
 from db import HealthDatabase, Metrics, DB_PATH
@@ -60,6 +61,35 @@ class HealthMonitor:
             logger.error(f"Error getting voltage information: {e}")
             return None
     
+    def get_network_stats(self):
+        """Get network I/O statistics
+        
+        Returns:
+            dict: Dictionary mapping interface names to network statistics dictionaries
+        """
+        try:
+            # Get network counters for all interfaces
+            net_io = psutil.net_io_counters(pernic=True)
+            
+            # Convert to a format that can be stored in the database
+            stats = {}
+            for interface, counters in net_io.items():
+                stats[interface] = {
+                    "bytes_sent": counters.bytes_sent,
+                    "bytes_recv": counters.bytes_recv,
+                    "packets_sent": counters.packets_sent,
+                    "packets_recv": counters.packets_recv,
+                    "errin": counters.errin,
+                    "errout": counters.errout,
+                    "dropin": counters.dropin,
+                    "dropout": counters.dropout
+                }
+            
+            return stats
+        except Exception as e:
+            logger.error(f"Error getting network statistics: {e}")
+            return None
+    
     def get_system_metrics(self):
         """
         Collect system health metrics
@@ -89,8 +119,14 @@ class HealthMonitor:
         
         try:
             while True:
+                # Get metrics
                 metrics = self.get_system_metrics()
-                if self.db.log_metrics(metrics):
+                
+                # Get network stats
+                network_stats = self.get_network_stats()
+                
+                # Log both to the database
+                if self.db.log_metrics(metrics, network_stats):
                     logger.debug(f"Logged metrics: {metrics.to_dict()}")
                 else:
                     logger.error("Failed to log metrics")

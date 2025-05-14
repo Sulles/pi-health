@@ -14,8 +14,9 @@ def load_data(hours=24, db_path=DB_PATH):
         db_path: Path to SQLite database
         
     Returns:
-        tuple: (timestamps, metrics_dict) where timestamps is a list of datetime objects
-               and metrics_dict contains lists of values for each metric
+        tuple: (timestamps, metrics_dict, network_data) where timestamps is a list of datetime objects,
+               metrics_dict contains lists of values for each metric, and network_data contains
+               network statistics by interface
     """
     db = HealthDatabase(db_path=db_path)
     raw_metrics = db.get_metrics_by_timespan(hours=hours)
@@ -27,6 +28,10 @@ def load_data(hours=24, db_path=DB_PATH):
     disk_percent = []
     temperature = []
     cpu_frequency = []
+    voltage = []  # New: voltage data
+    
+    # Initialize dictionaries for network data
+    network_data = {}
     
     # Process the data
     for metric in raw_metrics:
@@ -40,6 +45,37 @@ def load_data(hours=24, db_path=DB_PATH):
         disk_percent.append(metric['disk_percent'])
         temperature.append(metric['temperature'])
         cpu_frequency.append(metric['cpu_frequency'])
+        voltage.append(metric.get('voltage'))  # New: voltage data
+        
+        # Process network data if available
+        if 'network_stats' in metric and metric['network_stats']:
+            for net_stat in metric['network_stats']:
+                interface = net_stat['interface']
+                
+                # Initialize interface data if not exists
+                if interface not in network_data:
+                    network_data[interface] = {
+                        'timestamps': [],
+                        'bytes_sent': [],
+                        'bytes_recv': [],
+                        'packets_sent': [],
+                        'packets_recv': [],
+                        'errin': [],
+                        'errout': [],
+                        'dropin': [],
+                        'dropout': []
+                    }
+                
+                # Add data for this timestamp
+                network_data[interface]['timestamps'].append(timestamp)
+                network_data[interface]['bytes_sent'].append(net_stat['bytes_sent'])
+                network_data[interface]['bytes_recv'].append(net_stat['bytes_recv'])
+                network_data[interface]['packets_sent'].append(net_stat['packets_sent'])
+                network_data[interface]['packets_recv'].append(net_stat['packets_recv'])
+                network_data[interface]['errin'].append(net_stat['errin'])
+                network_data[interface]['errout'].append(net_stat['errout'])
+                network_data[interface]['dropin'].append(net_stat['dropin'])
+                network_data[interface]['dropout'].append(net_stat['dropout'])
     
     # Return organized data
     metrics_dict = {
@@ -47,10 +83,11 @@ def load_data(hours=24, db_path=DB_PATH):
         'memory_percent': memory_percent,
         'disk_percent': disk_percent,
         'temperature': temperature,
-        'cpu_frequency': cpu_frequency
+        'cpu_frequency': cpu_frequency,
+        'voltage': voltage  # New: voltage data
     }
     
-    return timestamps, metrics_dict
+    return timestamps, metrics_dict, network_data
 
 def get_latest_values(metrics):
     """
@@ -116,13 +153,14 @@ def get_evenly_spaced_indices(start, end, num):
         
     return indices
 
-def create_simple_dashboard(timestamps, metrics):
+def create_simple_dashboard(timestamps, metrics, network_data=None):
     """
     Create a simple dashboard with basic visualizations
     
     Args:
         timestamps: List of datetime objects
         metrics: Dictionary containing lists of metric values
+        network_data: Dictionary of network statistics by interface
         
     Returns:
         fig: Plotly figure object
@@ -130,19 +168,26 @@ def create_simple_dashboard(timestamps, metrics):
     # Get latest values for display
     latest = get_latest_values(metrics)
     
-    # Create a basic 2x2 grid layout
+    # Add an extra row if we have network data
+    rows = 3 if network_data else 2
+    
+    # Create a grid layout
     fig = sp.make_subplots(
-        rows=2, 
+        rows=rows, 
         cols=2,
         subplot_titles=(
             "CPU & Memory Usage (%)",
             "Disk Usage & Temperature",
-            "All Metrics Summary",
-            "Latest Statistics"
+            "Voltage & CPU Frequency", 
+            "Latest Statistics",
+            *([f"Network Traffic"] if network_data else [])
         ),
         specs=[
             [{"type": "xy"}, {"type": "xy"}],
-            [{"type": "xy"}, {"type": "table"}]
+            [{"type": "xy"}, {"type": "table"}],
+            *([
+                [{"type": "xy", "colspan": 2}, None],
+              ] if network_data else [])
         ],
         vertical_spacing=0.12,
         horizontal_spacing=0.08,
@@ -196,57 +241,34 @@ def create_simple_dashboard(timestamps, metrics):
             row=1, col=2
         )
     
-    # Bottom left: All metrics summary
-    # Sample data to avoid overcrowding if we have too many points
-    if len(timestamps) > 30:
-        indices = get_evenly_spaced_indices(0, len(timestamps)-1, 30)
-        sampled_times = [timestamps[i] for i in indices]
-        sampled_cpu = [metrics['cpu_percent'][i] for i in indices]
-        sampled_mem = [metrics['memory_percent'][i] for i in indices]
-        sampled_disk = [metrics['disk_percent'][i] for i in indices]
-        sampled_temp = [metrics['temperature'][i] if metrics['temperature'][i] is not None else 0 for i in indices] if has_temp_data else []
-        sampled_freq = [metrics['cpu_frequency'][i] if metrics['cpu_frequency'][i] is not None else 0 for i in indices] 
-    else:
-        sampled_times = timestamps
-        sampled_cpu = metrics['cpu_percent']
-        sampled_mem = metrics['memory_percent']
-        sampled_disk = metrics['disk_percent']
-        sampled_temp = metrics['temperature'] if has_temp_data else []
-        sampled_freq = metrics['cpu_frequency']
+    # Add voltage and frequency to the bottom left
+    has_voltage_data = any(v is not None for v in metrics['voltage'])
+    has_freq_data = any(f is not None for f in metrics['cpu_frequency'])
     
-    # Add bar chart with CPU, Memory, and Disk usage
-    fig.add_trace(
-        go.Bar(
-            x=sampled_times, 
-            y=sampled_cpu, 
-            name='CPU %',
-            marker_color='#FF5733',
-            opacity=0.7
-        ),
-        row=2, col=1
-    )
+    if has_voltage_data:
+        fig.add_trace(
+            go.Scatter(
+                x=timestamps, 
+                y=metrics['voltage'], 
+                mode='lines', 
+                name='Voltage (V)', 
+                line=dict(width=2, color='#6A0DAD')
+            ),
+            row=2, col=1
+        )
     
-    fig.add_trace(
-        go.Bar(
-            x=sampled_times, 
-            y=sampled_mem, 
-            name='Memory %',
-            marker_color='#33FF57',
-            opacity=0.7
-        ),
-        row=2, col=1
-    )
-    
-    fig.add_trace(
-        go.Bar(
-            x=sampled_times, 
-            y=sampled_disk, 
-            name='Disk %',
-            marker_color='#3357FF',
-            opacity=0.7
-        ),
-        row=2, col=1
-    )
+    if has_freq_data:
+        fig.add_trace(
+            go.Scatter(
+                x=timestamps, 
+                y=metrics['cpu_frequency'], 
+                mode='lines', 
+                name='CPU Freq (MHz)', 
+                line=dict(width=2, color='#FFA500'),
+                yaxis="y2"
+            ),
+            row=2, col=1
+        )
     
     # Bottom right: Table with latest values
     latest_data = [
@@ -258,11 +280,22 @@ def create_simple_dashboard(timestamps, metrics):
     if has_temp_data:
         latest_data.append(["Temperature", f"{latest['temperature']:.1f}°C"])
     
-    has_freq_data = any(f is not None for f in metrics['cpu_frequency'])
     if has_freq_data:
         latest_data.append(["CPU Frequency", f"{latest['cpu_frequency']:.0f} MHz"])
     
+    if has_voltage_data:
+        latest_data.append(["Voltage", f"{latest['voltage']:.4f} V"])
+    
     latest_data.append(["Last Update", timestamps[-1].strftime("%Y-%m-%d %H:%M:%S")])
+    
+    # Add network stats if available
+    if network_data:
+        for interface, data in network_data.items():
+            if data['bytes_sent'] and data['bytes_recv']:
+                latest_rx = data['bytes_recv'][-1]
+                latest_tx = data['bytes_sent'][-1]
+                latest_data.append([f"{interface} RX", f"{format_bytes(latest_rx)}"])
+                latest_data.append([f"{interface} TX", f"{format_bytes(latest_tx)}"])
     
     fig.add_trace(
         go.Table(
@@ -283,10 +316,46 @@ def create_simple_dashboard(timestamps, metrics):
         row=2, col=2
     )
     
+    # Add network traffic visualization if available
+    if network_data and rows > 2:
+        # Find the interface with most traffic
+        main_interface = max(network_data.keys(), 
+                            key=lambda x: sum(network_data[x]['bytes_sent']) + 
+                                         sum(network_data[x]['bytes_recv']) 
+                                         if network_data[x]['bytes_sent'] and network_data[x]['bytes_recv'] else 0)
+        
+        interface_data = network_data[main_interface]
+        
+        # Convert bytes to MB
+        sent_mb = [b/1048576 for b in interface_data['bytes_sent']] if interface_data['bytes_sent'] else []
+        recv_mb = [b/1048576 for b in interface_data['bytes_recv']] if interface_data['bytes_recv'] else []
+        
+        fig.add_trace(
+            go.Scatter(
+                x=interface_data['timestamps'], 
+                y=sent_mb,
+                mode='lines', 
+                name=f'{main_interface} TX (MB)', 
+                line=dict(width=2, color='#4CAF50')
+            ),
+            row=3, col=1
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=interface_data['timestamps'], 
+                y=recv_mb,
+                mode='lines', 
+                name=f'{main_interface} RX (MB)', 
+                line=dict(width=2, color='#2196F3')
+            ),
+            row=3, col=1
+        )
+    
     # Update layout for better appearance
     fig.update_layout(
         title='Raspberry Pi Health Dashboard',
-        height=800,
+        height=900 if network_data else 800,
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         template="plotly_white",
@@ -305,6 +374,32 @@ def create_simple_dashboard(timestamps, metrics):
     else:
         fig.update_yaxes(title_text="Disk Usage (%)", row=1, col=2)
     
+    # Update yaxis for voltage/frequency graph
+    if has_voltage_data:
+        fig.update_yaxes(title_text="Voltage (V)", row=2, col=1)
+    
+    if has_freq_data and has_voltage_data:
+        # Add a secondary y-axis for CPU frequency
+        fig.update_layout(
+            yaxis2=dict(
+                title="CPU Frequency (MHz)",
+                anchor="x",
+                overlaying="y3",
+                side="right"
+            ),
+            yaxis3=dict(
+                title="Voltage (V)",
+                anchor="x",
+                side="left"
+            )
+        )
+    elif has_freq_data:
+        fig.update_yaxes(title_text="CPU Frequency (MHz)", row=2, col=1)
+    
+    # Update yaxis for network chart if available
+    if network_data and rows > 2:
+        fig.update_yaxes(title_text="Data Transferred (MB)", row=3, col=1)
+    
     # Add range selector to the bottom chart
     fig.update_xaxes(
         rangeselector=dict(
@@ -315,38 +410,62 @@ def create_simple_dashboard(timestamps, metrics):
                 dict(step="all")
             ])
         ),
-        row=2, col=1
+        row=rows, col=1
     )
-    
-    # Update barmode to stack bars
-    fig.update_layout(barmode='group')
     
     return fig
 
-def create_dashboard(timestamps, metrics):
+def format_bytes(bytes_value):
+    """
+    Format bytes to appropriate unit (KB, MB, GB)
+    """
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_value < 1024:
+            return f"{bytes_value:.2f} {unit}"
+        bytes_value /= 1024.0
+    return f"{bytes_value:.2f} PB"
+
+def create_dashboard(timestamps, metrics, network_data=None):
     """
     Create a dashboard with multiple metrics
     
     Args:
         timestamps: List of datetime objects
         metrics: Dictionary containing lists of metric values
+        network_data: Dictionary of network statistics by interface
         
     Returns:
         fig: Plotly figure object
     """
+    # Calculate how many rows we need
+    base_rows = 5  # CPU, Memory, Disk, Temperature, CPU Frequency
+    has_voltage_data = any(v is not None for v in metrics['voltage'])
+    voltage_row = 1 if has_voltage_data else 0
+    network_rows = 1 if network_data else 0
+    
+    total_rows = base_rows + voltage_row + network_rows
+    
     # Create subplots: one row for each metric
+    row_titles = [
+        "CPU Usage (%)", 
+        "Memory Usage (%)", 
+        "Disk Usage (%)", 
+        "CPU Temperature (°C)",
+        "CPU Frequency (MHz)"
+    ]
+    
+    if has_voltage_data:
+        row_titles.append("Voltage (V)")
+    
+    if network_data:
+        row_titles.append("Network Traffic (MB)")
+    
     fig = sp.make_subplots(
-        rows=5, 
+        rows=total_rows, 
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.05,
-        subplot_titles=(
-            "CPU Usage (%)", 
-            "Memory Usage (%)", 
-            "Disk Usage (%)", 
-            "CPU Temperature (°C)",
-            "CPU Frequency (MHz)"
-        )
+        vertical_spacing=0.03,
+        subplot_titles=row_titles
     )
     
     # Add CPU usage trace
@@ -383,10 +502,57 @@ def create_dashboard(timestamps, metrics):
             row=5, col=1
         )
     
+    # Add voltage trace if available
+    current_row = 6
+    if has_voltage_data:
+        fig.add_trace(
+            go.Scatter(x=timestamps, y=metrics['voltage'], mode='lines', name='Voltage'),
+            row=current_row, col=1
+        )
+        current_row += 1
+    
+    # Add network data if available
+    if network_data and len(network_data) > 0:
+        # Find the interface with most traffic
+        main_interface = max(network_data.keys(), 
+                            key=lambda x: sum(network_data[x]['bytes_sent']) + 
+                                         sum(network_data[x]['bytes_recv']) 
+                                         if network_data[x]['bytes_sent'] and network_data[x]['bytes_recv'] else 0)
+        
+        interface_data = network_data[main_interface]
+        
+        # Convert bytes to MB
+        sent_mb = [b/1048576 for b in interface_data['bytes_sent']] if interface_data['bytes_sent'] else []
+        recv_mb = [b/1048576 for b in interface_data['bytes_recv']] if interface_data['bytes_recv'] else []
+        
+        # Add network traces
+        if sent_mb and recv_mb:
+            fig.add_trace(
+                go.Scatter(
+                    x=interface_data['timestamps'], 
+                    y=sent_mb,
+                    mode='lines', 
+                    name=f'{main_interface} TX (MB)', 
+                    line=dict(width=2, color='#4CAF50')
+                ),
+                row=current_row, col=1
+            )
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=interface_data['timestamps'], 
+                    y=recv_mb,
+                    mode='lines', 
+                    name=f'{main_interface} RX (MB)', 
+                    line=dict(width=2, color='#2196F3')
+                ),
+                row=current_row, col=1
+            )
+    
     # Update layout
     fig.update_layout(
         title='Raspberry Pi Health Metrics',
-        height=1000,
+        height=150 * total_rows,  # Adjust height based on number of rows
         legend_tracegroupgap=180,
         hovermode='x unified'
     )
@@ -403,18 +569,19 @@ def create_dashboard(timestamps, metrics):
                 dict(step="all")
             ])
         ),
-        row=5, col=1
+        row=total_rows, col=1
     )
     
     return fig
 
-def create_summary_plot(timestamps, metrics):
+def create_summary_plot(timestamps, metrics, network_data=None):
     """
     Create a summary plot with all metrics on one graph
     
     Args:
         timestamps: List of datetime objects
         metrics: Dictionary containing lists of metric values
+        network_data: Dictionary of network statistics by interface
         
     Returns:
         fig: Plotly figure object
@@ -441,6 +608,50 @@ def create_summary_plot(timestamps, metrics):
             mode='lines', 
             name='CPU Freq (MHz/10)'
         ))
+    
+    # Add voltage trace (if data exists)
+    has_voltage_data = any(v is not None for v in metrics['voltage'])
+    if has_voltage_data:
+        # Scale voltage to fit on the same graph (multiply by 10)
+        scaled_voltage = [v*10 if v is not None else None for v in metrics['voltage']]
+        fig.add_trace(go.Scatter(
+            x=timestamps, 
+            y=scaled_voltage, 
+            mode='lines', 
+            name='Voltage (V) × 10'
+        ))
+    
+    # Add network data if available (only for the main interface)
+    if network_data and len(network_data) > 0:
+        # Find the interface with most traffic
+        main_interface = max(network_data.keys(), 
+                            key=lambda x: sum(network_data[x]['bytes_sent']) + 
+                                         sum(network_data[x]['bytes_recv']) 
+                                         if network_data[x]['bytes_sent'] and network_data[x]['bytes_recv'] else 0)
+        
+        interface_data = network_data[main_interface]
+        
+        # Convert to MB and normalize to fit scale
+        if interface_data['bytes_sent'] and interface_data['bytes_recv']:
+            # Normalized network traffic (MB / 10)
+            sent_mb = [b/(1048576*10) for b in interface_data['bytes_sent']]
+            recv_mb = [b/(1048576*10) for b in interface_data['bytes_recv']]
+            
+            fig.add_trace(go.Scatter(
+                x=interface_data['timestamps'], 
+                y=sent_mb,
+                mode='lines', 
+                name=f'{main_interface} TX (MB/10)', 
+                line=dict(dash='dot')
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=interface_data['timestamps'], 
+                y=recv_mb,
+                mode='lines', 
+                name=f'{main_interface} RX (MB/10)', 
+                line=dict(dash='dot')
+            ))
     
     fig.update_layout(
         title='Raspberry Pi Health Metrics Summary',
@@ -473,19 +684,29 @@ def main():
     parser.add_argument('--output', type=str, help='Output HTML file (optional)')
     parser.add_argument('--view', choices=['dashboard', 'summary', 'simple', 'all'], default='simple', 
                         help='View type: dashboard (separate plots), summary (all on one), simple (basic dashboard), or all')
+    parser.add_argument('--interface', type=str, help='Specific network interface to monitor (optional)')
     
     args = parser.parse_args()
     
     # Load data
-    timestamps, metrics = load_data(hours=args.hours, db_path=args.db)
+    timestamps, metrics, network_data = load_data(hours=args.hours, db_path=args.db)
     
     if len(timestamps) == 0:
         print(f"No data found for the last {args.hours} hours")
         return
+    
+    # Filter network data if interface is specified
+    if args.interface and network_data:
+        if args.interface in network_data:
+            network_data = {args.interface: network_data[args.interface]}
+        else:
+            print(f"Interface {args.interface} not found. Available interfaces: {', '.join(network_data.keys()) if network_data else 'none'}")
+            if not network_data:
+                network_data = None
         
     # Create figures based on view type
     if args.view in ['dashboard', 'all']:
-        dashboard = create_dashboard(timestamps, metrics)
+        dashboard = create_dashboard(timestamps, metrics, network_data)
         if args.output:
             output_file = args.output if args.view == 'dashboard' else f"dashboard_{args.output}"
             dashboard.write_html(output_file)
@@ -493,7 +714,7 @@ def main():
             dashboard.show()
     
     if args.view in ['summary', 'all']:
-        summary = create_summary_plot(timestamps, metrics)
+        summary = create_summary_plot(timestamps, metrics, network_data)
         if args.output:
             output_file = args.output if args.view == 'summary' else f"summary_{args.output}"
             summary.write_html(output_file)
@@ -501,7 +722,7 @@ def main():
             summary.show()
             
     if args.view in ['simple', 'all']:
-        simple = create_simple_dashboard(timestamps, metrics)
+        simple = create_simple_dashboard(timestamps, metrics, network_data)
         if args.output:
             output_file = args.output if args.view == 'simple' else f"simple_{args.output}"
             simple.write_html(output_file)
