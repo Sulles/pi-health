@@ -15,10 +15,10 @@ def parse_args():
                        help='Hostname or IP address of the Raspberry Pi (default: rpi4)')
     parser.add_argument('--user', type=str, default='admin',
                        help='Username for SSH connection (default: admin)')
-    parser.add_argument('--remote-path', type=str, default=DB_PATH,
-                       help=f'Path to the database on the Raspberry Pi (default: {DB_PATH})')
-    parser.add_argument('--local-path', type=str, default=f"~/GitHub/pi-health/{DB_PATH}",
-                       help=f'Path to save the database locally (default: ~/GitHub/pi-health/{DB_PATH})')
+    parser.add_argument('--remote-path', type=str, default=f"~/GitHub/pi-health/{DB_PATH}",
+                       help=f'Path to the database on the Raspberry Pi (default: ~/GitHub/pi-health/{DB_PATH})')
+    parser.add_argument('--local-path', type=str, default=DB_PATH,
+                       help=f'Path to save the database locally (default: {DB_PATH})')
     parser.add_argument('--port', type=int, default=22,
                        help='SSH port (default: 22)')
     parser.add_argument('--identity', type=str, 
@@ -44,6 +44,10 @@ def pull_database(host, user, remote_path, local_path, port=22, identity=None):
     # Ensure the local directory exists
     local_dir = os.path.dirname(os.path.abspath(local_path))
     os.makedirs(local_dir, exist_ok=True)
+
+    # Remove the database file if it exists
+    if os.path.exists(local_path):
+        os.remove(local_path)
     
     # Build the SCP command
     scp_cmd = ['scp']
@@ -61,7 +65,7 @@ def pull_database(host, user, remote_path, local_path, port=22, identity=None):
     scp_cmd.extend([source, local_path])
     
     try:
-        print(f"Pulling database from {host}...")
+        print(f"Executing: {' '.join(scp_cmd)}")
         result = subprocess.run(scp_cmd, capture_output=True, text=True)
         
         if result.returncode == 0:
