@@ -5,6 +5,7 @@ import logging
 import psutil
 import datetime
 import argparse
+import subprocess
 
 # Import our database module
 from db import HealthDatabase, Metrics, DB_PATH
@@ -42,6 +43,23 @@ class HealthMonitor:
             logger.error(f"Error getting CPU temperature: {e}")
             return None
     
+    def get_voltage(self):
+        """Get core voltage information"""
+        try:
+            # Use vcgencmd to get voltage information
+            result = subprocess.run(['vcgencmd', 'measure_volts', 'core'], 
+                                   capture_output=True, text=True, check=True)
+            # Parse the output which is in the format "volt=1.2345V"
+            voltage_str = result.stdout.strip()
+            if voltage_str.startswith('volt='):
+                # Extract the numeric part and remove the 'V' at the end
+                voltage = float(voltage_str[5:-1])
+                return voltage
+            return None
+        except (subprocess.SubprocessError, ValueError, FileNotFoundError) as e:
+            logger.error(f"Error getting voltage information: {e}")
+            return None
+    
     def get_system_metrics(self):
         """
         Collect system health metrics
@@ -61,7 +79,8 @@ class HealthMonitor:
             disk_percent=psutil.disk_usage('/').percent,
             temperature=self.get_cpu_temperature(),
             cpu_frequency=cpu_frequency,
-            uptime=time.time() - psutil.boot_time()
+            uptime=time.time() - psutil.boot_time(),
+            voltage=self.get_voltage()
         )
     
     def run(self):

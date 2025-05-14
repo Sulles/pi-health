@@ -27,7 +27,8 @@ class Metrics:
         disk_percent: float,
         uptime: float,
         temperature: Optional[float] = None,
-        cpu_frequency: Optional[float] = None
+        cpu_frequency: Optional[float] = None,
+        voltage: Optional[float] = None
     ):
         """
         Initialize a metrics object with validation
@@ -40,6 +41,7 @@ class Metrics:
             uptime: System uptime in seconds
             temperature: CPU temperature in Celsius (optional)
             cpu_frequency: CPU frequency in MHz (optional)
+            voltage: Core voltage in Volts (optional)
         """
         self.timestamp = timestamp
         self.cpu_percent = float(cpu_percent)
@@ -48,13 +50,14 @@ class Metrics:
         self.uptime = float(uptime)
         self.temperature = float(temperature) if temperature is not None else None
         self.cpu_frequency = float(cpu_frequency) if cpu_frequency is not None else None
+        self.voltage = float(voltage) if voltage is not None else None
     
     @classmethod
     def get_column_names(cls) -> List[str]:
         """Return the column names for database operations"""
         return [
             "timestamp", "cpu_percent", "memory_percent", "disk_percent",
-            "temperature", "cpu_frequency", "uptime"
+            "temperature", "cpu_frequency", "uptime", "voltage"
         ]
     
     @classmethod
@@ -67,7 +70,8 @@ class Metrics:
             "disk_percent": "REAL",
             "temperature": "REAL",
             "cpu_frequency": "REAL",
-            "uptime": "REAL"
+            "uptime": "REAL",
+            "voltage": "REAL"
         }
     
     @classmethod
@@ -108,7 +112,8 @@ class Metrics:
             disk_percent=data['disk_percent'],
             uptime=data['uptime'],
             temperature=data.get('temperature'),
-            cpu_frequency=data.get('cpu_frequency')
+            cpu_frequency=data.get('cpu_frequency'),
+            voltage=data.get('voltage')
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -120,7 +125,8 @@ class Metrics:
             'disk_percent': self.disk_percent,
             'temperature': self.temperature,
             'cpu_frequency': self.cpu_frequency,
-            'uptime': self.uptime
+            'uptime': self.uptime,
+            'voltage': self.voltage
         }
     
     def to_tuple(self) -> tuple:
@@ -132,7 +138,8 @@ class Metrics:
             self.disk_percent,
             self.temperature,
             self.cpu_frequency,
-            self.uptime
+            self.uptime,
+            self.voltage
         )
 
 class HealthDatabase:

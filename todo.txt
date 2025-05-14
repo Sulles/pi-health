@@ -1,0 +1,13 @@
+Here are additional metrics you could monitor on your Raspberry Pi:
+- Voltage levels (core, RAM, etc.) - Use vcgencmd measure_volts
+- GPIO pin status - Using gpiozero
+- Network statistics - Capture bandwidth, packets using psutil.net_io_counters()
+- Individual CPU core usage - psutil.cpu_percent(percpu=True)
+- Throttling status - vcgencmd get_throttled detects under-voltage and thermal throttling
+- WiFi signal strength - Parse output from 'iwconfig'
+- Storage I/O metrics - psutil.disk_io_counters()
+- Load averages - os.getloadavg()
+- USB device connections - Parse lsusb output
+- Memory swap usage - psutil.swap_memory()
+- Running services status - systemctl commands
+- Hardware errors - Parse kernel logs or dmesg output
