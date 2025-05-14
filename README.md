@@ -56,12 +56,7 @@ The best way to run this monitor is as a systemd service, which allows it to:
 
 ### Setting up the Systemd Service
 
-1. Copy the service file to the systemd directory:
-   ```bash
-   sudo cp pi-health.service /etc/systemd/system/
-   ```
-
-2. Edit the service file to use the correct paths for your setup:
+1. Edit the service file to use the correct paths for your setup:
    ```bash
    sudo nano /etc/systemd/system/pi-health.service
    ```
@@ -70,6 +65,11 @@ The best way to run this monitor is as a systemd service, which allows it to:
    - `ExecStart`: Path to Python and the monitor script
    - `WorkingDirectory`: Directory where the script is located
    - `User`: User to run the service as (typically 'pi')
+
+2. Copy the service file to the systemd directory:
+   ```bash
+   sudo cp pi-health.service /etc/systemd/system/
+   ```
 
 3. Enable and start the service:
    ```bash
@@ -86,6 +86,21 @@ The best way to run this monitor is as a systemd service, which allows it to:
    ```bash
    sudo journalctl -u pi-health.service
    ```
+
+6. Stop the service:
+   ```bash
+   sudo systemctl stop pi-health.service
+   sudo systemctl disable pi-health.service
+   ```
+
+### Reloading Modified Service File
+
+If you make changes to the pi-health.service file, you need to reload the systemd configuration:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart pi-health.service
+```
 
 ## Visualizing Data
 
