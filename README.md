@@ -1,6 +1,6 @@
 # Raspberry Pi Health Monitor
 
-A Python script that periodically monitors and logs Raspberry Pi health metrics to a SQLite database.
+A Python script that periodically monitors and logs Raspberry Pi health metrics to a SQLite database. It includes tools for viewing metrics as interactive dashboards and retrieving data remotely.
 
 ## Metrics Collected
 
@@ -24,7 +24,7 @@ A Python script that periodically monitors and logs Raspberry Pi health metrics 
    pip install -r requirements.txt
    ```
 
-## Usage
+## Monitoring Usage
 
 ### Running Directly
 
@@ -36,7 +36,7 @@ python monitor.py
 
 The script will continue running until interrupted (Ctrl+C).
 
-### Command Line Options
+### Command Line Options for monitor.py
 
 - `--interval SECONDS`: Set the monitoring interval (default: 60 seconds)
 - `--db PATH`: Set the database file path (default: pi_health.db)
@@ -87,12 +87,75 @@ The best way to run this monitor is as a systemd service, which allows it to:
    sudo journalctl -u pi-health.service
    ```
 
+## Visualizing Data
+
+The project includes a visualization tool that creates interactive dashboards from the collected data.
+
+### Running the Visualization Tool
+
+```bash
+python view.py
+```
+
+### Command Line Options for view.py
+
+- `--hours HOURS`: Number of hours of data to display (default: 24)
+- `--db PATH`: Set the database file path (default: pi-health.db)
+- `--output FILE`: Save the dashboard to an HTML file instead of displaying it
+- `--view TYPE`: Choose the visualization type (options: dashboard, summary, simple, all)
+
+Examples:
+```bash
+# View last 48 hours of data
+python view.py --hours 48
+
+# Save the simple dashboard to an HTML file
+python view.py --output dashboard.html --view simple
+
+# View all dashboard types
+python view.py --view all
+```
+
+### Visualization Types
+
+- **Simple**: A basic 2x2 dashboard with:
+  - CPU & Memory usage
+  - Disk usage & Temperature
+  - Summary bar chart
+  - Table of latest statistics
+
+- **Dashboard**: Detailed multi-panel view with separate graphs for each metric
+
+- **Summary**: Single graph showing all metrics together
+
+## Retrieving Data from Remote Pi
+
+If you're running the monitor on a remote Raspberry Pi, you can use the pull script to retrieve the database file:
+
+```bash
+python pull.py
+```
+
+### Command Line Options for pull.py
+
+- `--host HOST`: Hostname or IP address of the Raspberry Pi (default: rpi4)
+- `--user USER`: Username for SSH connection (default: admin)
+- `--remote-path PATH`: Path to the database on the Raspberry Pi (default: pi-health.db)
+- `--local-path PATH`: Path to save the database locally (default: ~/GitHub/pi-health/pi-health.db)
+- `--port PORT`: SSH port (default: 22)
+- `--identity FILE`: Path to SSH identity file (optional)
+
+Example:
+```bash
+python pull.py --host 192.168.1.100 --user pi --remote-path /home/pi/pi-health/pi-health.db
+```
+
 ## Querying the Data
 
 You can query the collected data using SQLite:
 
 ```bash
-sqlite3 pi_health.db "SELECT * FROM health_metrics ORDER BY timestamp DESC LIMIT 10;"
+sqlite3 pi-health.db "SELECT * FROM health_metrics ORDER BY timestamp DESC LIMIT 10;"
 ```
 
 Example queries:
@@ -113,3 +176,25 @@ FROM health_metrics
 WHERE temperature > 70 
 ORDER BY temperature DESC;
 ```
+
+## Database Structure
+
+The project uses SQLite to store metrics in a table called `health_metrics` with the following structure:
+
+- `id`: Integer primary key
+- `timestamp`: Text (ISO format date/time)
+- `cpu_percent`: Real number (0-100)
+- `memory_percent`: Real number (0-100)
+- `disk_percent`: Real number (0-100)
+- `temperature`: Real number (CPU temperature in Celsius)
+- `cpu_frequency`: Real number (CPU frequency in MHz)
+- `uptime`: Real number (System uptime in seconds)
+
+## Project Structure
+
+- `monitor.py`: Main monitoring script
+- `view.py`: Visualization dashboard tool
+- `db.py`: Database handling module
+- `pull.py`: Remote database retrieval script
+- `pi-health.service`: Systemd service configuration file
+- `pi-health.db`: SQLite database file (created during runtime)
